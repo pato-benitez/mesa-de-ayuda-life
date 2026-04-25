@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -34,6 +34,107 @@ function useIsMobile() {
   return mobile;
 }
 
+async function uploadFiles(files, ticketId) {
+  const urls = [];
+  for (const file of files) {
+    const ext  = file.name.split(".").pop();
+    const path = `${ticketId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+    const { error } = await supabase.storage.from("ticket-attachments").upload(path, file);
+    if (!error) {
+      const { data } = supabase.storage.from("ticket-attachments").getPublicUrl(path);
+      urls.push(data.publicUrl);
+    }
+  }
+  return urls;
+}
+
+function isImage(url) {
+  return /\.(jpg|jpeg|png|gif|webp|heic)$/i.test(url);
+}
+
+function FilePreview({ url, onRemove }) {
+  return (
+    <div style={{ position: "relative", display: "inline-block" }}>
+      {isImage(url) ? (
+        <a href={url} target="_blank" rel="noopener noreferrer">
+          <img src={url} alt="" style={{ width: 72, height: 72, objectFit: "cover", borderRadius: 8, border: "1px solid #E0E0E0", display: "block" }} />
+        </a>
+      ) : (
+        <a href={url} target="_blank" rel="noopener noreferrer" style={{
+          display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
+          width: 72, height: 72, borderRadius: 8, border: "1px solid #E0E0E0",
+          background: "#F7F7F8", fontSize: 10, color: "#666", textDecoration: "none", gap: 4, padding: 4, textAlign: "center",
+        }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 64 }}>archivo</span>
+        </a>
+      )}
+      {onRemove && (
+        <button onClick={onRemove} style={{
+          position: "absolute", top: -6, right: -6, width: 18, height: 18,
+          borderRadius: "50%", border: "none", background: "#E53E3E", color: "#fff",
+          cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+        }}>✕</button>
+      )}
+    </div>
+  );
+}
+
+function UploadZone({ files, setFiles }) {
+  const inputRef = useRef();
+  const [dragging, setDragging] = useState(false);
+
+  const handleFiles = (incoming) => {
+    const valid = Array.from(incoming).filter(f => f.size < 10 * 1024 * 1024);
+    setFiles(prev => [...prev, ...valid]);
+  };
+
+  return (
+    <div>
+      <input ref={inputRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx"
+        style={{ display: "none" }} onChange={e => handleFiles(e.target.files)} />
+      <div onClick={() => inputRef.current.click()}
+        onDragOver={e => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={e => { e.preventDefault(); setDragging(false); handleFiles(e.dataTransfer.files); }}
+        style={{
+          border: `2px dashed ${dragging ? "#4F46E5" : "#E0E0E0"}`, borderRadius: 10,
+          padding: "16px", textAlign: "center", cursor: "pointer", color: "#888",
+          background: dragging ? "#F5F4FF" : "transparent", transition: "all 0.15s",
+        }}
+        onMouseEnter={e => e.currentTarget.style.borderColor = "#4F46E5"}
+        onMouseLeave={e => { if (!dragging) e.currentTarget.style.borderColor = "#E0E0E0"; }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 13 }}>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>
+          Subir archivos o fotos · máx 10MB
+        </div>
+      </div>
+      {files.length > 0 && (
+        <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+          {files.map((f, i) => (
+            <div key={i} style={{ position: "relative" }}>
+              {f.type.startsWith("image/") ? (
+                <img src={URL.createObjectURL(f)} alt={f.name}
+                  style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, border: "1px solid #E0E0E0" }} />
+              ) : (
+                <div style={{ width: 64, height: 64, borderRadius: 8, border: "1px solid #E0E0E0", background: "#F7F7F8", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                </div>
+              )}
+              <button onClick={() => setFiles(prev => prev.filter((_, j) => j !== i))} style={{
+                position: "absolute", top: -6, right: -6, width: 18, height: 18,
+                borderRadius: "50%", border: "none", background: "#E53E3E", color: "#fff",
+                cursor: "pointer", fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center", padding: 0,
+              }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function Badge({ label, type = "status" }) {
   const s = type === "status" ? statusStyle[label] : priorityStyle[label];
   if (!s) return null;
@@ -57,17 +158,24 @@ const ITicket = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none
 const IPlus   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
 const IWA     = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413Z"/></svg>;
 const ISearch = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>;
-const IUpload = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg>;
 const IOpen   = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 const IClock  = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 const ICheck  = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
 const IClosed = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>;
 
-// Helper: convert Supabase row → app format
 function fromDb(t) {
   const days = Math.floor((Date.now() - new Date(t.created_at)) / 86400000);
-  return { ...t, daysAgo: days, reportedBy: t.reported_by };
+  return { ...t, daysAgo: days, reportedBy: t.reported_by, attachments: t.attachments || [] };
 }
+
+/* ── Shared input/select styles ── */
+const fieldInp = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #E0E0E0", fontSize: 14, boxSizing: "border-box", outline: "none", color: "#333", background: "#fff" };
+const fieldSel = { ...fieldInp, appearance: "none", backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 10px center" };
+const label = (txt, required) => (
+  <label style={{ display: "block", fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 5 }}>
+    {txt}{required && <span style={{ color: "#E24B4A", marginLeft: 3 }}>*</span>}
+  </label>
+);
 
 function TicketRow({ ticket, onClick }) {
   return (
@@ -90,6 +198,7 @@ function TicketRow({ ticket, onClick }) {
           <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#888" }}><IPin />{ticket.location}</span>
           {ticket.reportedBy && <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#888" }}><IUser />{ticket.reportedBy}</span>}
           <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#888" }}><ICal />{ticket.daysAgo === 0 ? "hoy" : `hace ${ticket.daysAgo} días`}</span>
+          {ticket.attachments?.length > 0 && <span style={{ fontSize: 12, color: "#888" }}>📎 {ticket.attachments.length}</span>}
         </div>
       </div>
       <div style={{ color: "#CCC", flexShrink: 0, marginTop: 2 }}><IChev /></div>
@@ -97,94 +206,180 @@ function TicketRow({ ticket, onClick }) {
   );
 }
 
+/* ── Fully editable ticket modal ── */
 function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
-  const [status, setStatus]         = useState(ticket.status);
-  const [assignee, setAssignee]     = useState(ticket.assignee || "");
-  const [reportedBy, setReportedBy] = useState(ticket.reportedBy || "");
-  const [saving, setSaving]         = useState(false);
+  const [form, setForm] = useState({
+    title:       ticket.title || "",
+    description: ticket.description || "",
+    location:    ticket.location || "",
+    priority:    ticket.priority || "Media",
+    status:      ticket.status || "Abierto",
+    type:        ticket.type || "",
+    assignee:    ticket.assignee || "",
+    reportedBy:  ticket.reportedBy || "",
+    deadline:    ticket.deadline || "",
+  });
+  const [existingAttachments, setExistingAttachments] = useState(ticket.attachments || []);
+  const [newFiles, setNewFiles] = useState([]);
+  const [saving, setSaving]     = useState(false);
+
+  const set = (k, v) => setForm(f => ({ ...f, [k]: v }));
 
   const handleSave = async () => {
+    if (!form.title.trim()) return;
     setSaving(true);
-    const { error } = await supabase
-      .from("tickets")
-      .update({ status, assignee: assignee || null, reported_by: reportedBy || null })
-      .eq("id", ticket.id);
+    let attachments = existingAttachments;
+    if (newFiles.length > 0) {
+      const uploaded = await uploadFiles(newFiles, ticket.id);
+      attachments = [...attachments, ...uploaded];
+    }
+    const { error } = await supabase.from("tickets").update({
+      title:       form.title,
+      description: form.description,
+      location:    form.location,
+      priority:    form.priority,
+      status:      form.status,
+      type:        form.type,
+      assignee:    form.assignee || null,
+      reported_by: form.reportedBy || null,
+      deadline:    form.deadline || null,
+      attachments,
+    }).eq("id", ticket.id);
     setSaving(false);
-    if (!error) onUpdate({ ...ticket, status, assignee: assignee || null, reportedBy: reportedBy || null });
+    if (!error) onUpdate({ ...ticket, ...form, reportedBy: form.reportedBy, attachments });
     onClose();
   };
 
+  const panelStyle = isMobile
+    ? { background: "#fff", borderRadius: "16px 16px 0 0", width: "100%", maxHeight: "95vh", overflowY: "auto" }
+    : { background: "#fff", borderRadius: 16, width: "100%", maxWidth: 600, maxHeight: "92vh", overflowY: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.18)" };
+
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 1000,
+      position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000,
       display: "flex", alignItems: isMobile ? "flex-end" : "center",
-      justifyContent: isMobile ? "stretch" : "center", padding: isMobile ? 0 : 24,
+      justifyContent: "center", padding: isMobile ? 0 : 24,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
-      <div style={{
-        background: "#fff", borderRadius: isMobile ? "16px 16px 0 0" : 16,
-        width: "100%", maxWidth: isMobile ? "100%" : 560, maxHeight: "90vh", overflowY: "auto",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
-      }}>
-        <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
-              <Badge label={ticket.status} type="status" />
-              <Badge label={ticket.priority} type="priority" />
-            </div>
-            <div style={{ fontWeight: 700, fontSize: 17, color: "#1a1a1a" }}>{ticket.title}</div>
-          </div>
+      <div style={panelStyle}>
+
+        {/* Header */}
+        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a" }}>Editar Ticket #{ticket.id}</div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4 }}><IX /></button>
         </div>
-        <div style={{ padding: "16px 20px" }}>
-          <div style={{ marginBottom: 14 }}>
-            <div style={{ fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 4 }}>Descripción</div>
-            <div style={{ fontSize: 14, color: "#444", lineHeight: 1.6 }}>{ticket.description}</div>
+
+        <div style={{ padding: "20px" }}>
+
+          {/* Título */}
+          <div style={{ marginBottom: 16 }}>
+            {label("Problema", true)}
+            <input value={form.title} onChange={e => set("title", e.target.value)}
+              placeholder="Describe brevemente el problema"
+              style={{ ...fieldInp, fontWeight: 600, fontSize: 15 }} />
           </div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 18 }}>
+
+          {/* Descripción */}
+          <div style={{ marginBottom: 16 }}>
+            {label("Descripción")}
+            <textarea value={form.description} onChange={e => set("description", e.target.value)}
+              placeholder="Describe el problema con detalle..."
+              style={{ ...fieldInp, height: 90, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+          </div>
+
+          {/* Estado + Prioridad */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Ubicación</div>
-              <div style={{ fontSize: 14, color: "#333", display: "flex", alignItems: "center", gap: 5 }}><IPin />{ticket.location}</div>
+              {label("Estado")}
+              <select value={form.status} onChange={e => set("status", e.target.value)} style={fieldSel}>
+                {STATUSES.map(s => <option key={s}>{s}</option>)}
+              </select>
             </div>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Tipo</div>
-              <div style={{ fontSize: 14, color: "#333" }}>{ticket.type}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Reportado por</div>
-              <div style={{ fontSize: 14, color: "#333" }}>{ticket.reportedBy || <span style={{ color: "#CCC" }}>—</span>}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 3 }}>Creado</div>
-              <div style={{ fontSize: 14, color: "#333", display: "flex", alignItems: "center", gap: 5 }}><ICal />hace {ticket.daysAgo} días</div>
+              {label("Prioridad")}
+              <select value={form.priority} onChange={e => set("priority", e.target.value)} style={fieldSel}>
+                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
+              </select>
             </div>
           </div>
-          <div style={{ borderTop: "1px solid #F0F0F0", paddingTop: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#555", marginBottom: 10 }}>Actualizar ticket</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 14 }}>
-              <div>
-                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Estado</label>
-                <select value={status} onChange={e => setStatus(e.target.value)}
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #DDD", fontSize: 14, background: "#fff" }}>
-                  {STATUSES.map(s => <option key={s}>{s}</option>)}
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Responsable</label>
-                <input value={assignee} onChange={e => setAssignee(e.target.value)} placeholder="Nombre..."
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #DDD", fontSize: 14, boxSizing: "border-box" }} />
-              </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <label style={{ fontSize: 12, color: "#888", display: "block", marginBottom: 4 }}>Reportado por</label>
-                <input value={reportedBy} onChange={e => setReportedBy(e.target.value)} placeholder="Nombre de quien reporta..."
-                  style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid #DDD", fontSize: 14, boxSizing: "border-box" }} />
+
+          {/* Ubicación + Tipo */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              {label("Ubicación", true)}
+              <select value={form.location} onChange={e => set("location", e.target.value)} style={fieldSel}>
+                <option value="">Seleccionar</option>
+                {LOCATIONS.map(l => <option key={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              {label("Tipo")}
+              <select value={form.type} onChange={e => set("type", e.target.value)} style={fieldSel}>
+                <option value="">Seleccionar</option>
+                {TYPES.map(t => <option key={t}>{t}</option>)}
+              </select>
+            </div>
+          </div>
+
+          {/* Reportado por + Responsable */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+            <div>
+              {label("Reportado por")}
+              <input value={form.reportedBy} onChange={e => set("reportedBy", e.target.value)}
+                placeholder="Nombre..." style={fieldInp} />
+            </div>
+            <div>
+              {label("Responsable")}
+              <input value={form.assignee} onChange={e => set("assignee", e.target.value)}
+                placeholder="Nombre..." style={fieldInp} />
+            </div>
+          </div>
+
+          {/* Fecha límite + creado */}
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+            <div>
+              {label("Fecha límite")}
+              <input type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} style={fieldInp} />
+            </div>
+            <div>
+              {label("Creado")}
+              <div style={{ ...fieldInp, background: "#F7F7F8", color: "#888", cursor: "default" }}>
+                hace {ticket.daysAgo} días
               </div>
             </div>
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingBottom: isMobile ? 16 : 0 }}>
-              <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>Cancelar</button>
-              <button onClick={handleSave} disabled={saving} style={{ padding: "10px 20px", borderRadius: 8, border: "none", background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 500, opacity: saving ? 0.7 : 1 }}>
-                {saving ? "Guardando..." : "Guardar"}
-              </button>
+          </div>
+
+          {/* Archivos existentes */}
+          {existingAttachments.length > 0 && (
+            <div style={{ marginBottom: 16 }}>
+              {label("Archivos adjuntos")}
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                {existingAttachments.map(url => (
+                  <FilePreview key={url} url={url}
+                    onRemove={() => setExistingAttachments(prev => prev.filter(u => u !== url))} />
+                ))}
+              </div>
             </div>
+          )}
+
+          {/* Subir nuevos archivos */}
+          <div style={{ marginBottom: 24 }}>
+            {label(existingAttachments.length > 0 ? "Agregar más archivos" : "Archivos adjuntos")}
+            <UploadZone files={newFiles} setFiles={setNewFiles} />
+          </div>
+
+          {/* Botones */}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", paddingBottom: isMobile ? 8 : 0 }}>
+            <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>
+              Cancelar
+            </button>
+            <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
+              flex: isMobile ? 1 : undefined,
+              padding: "10px 24px", borderRadius: 8, border: "none",
+              background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+              opacity: saving || !form.title.trim() ? 0.6 : 1,
+            }}>
+              {saving ? "Guardando..." : "Guardar cambios"}
+            </button>
           </div>
         </div>
       </div>
@@ -206,9 +401,8 @@ function Dashboard({ tickets, onNavigate, onOpenTicket, isMobile, loading }) {
     { label: "Resueltos",  val: counts["Resuelto"],   icon: <ICheck c="#2E7D32" /> },
     { label: "Cerrados",   val: counts["Cerrado"],    icon: <IClosed c="#9E9E9E" /> },
   ];
-
   return (
-    <div style={{ flex: 1, padding: isMobile ? "20px 16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
+    <div style={{ padding: isMobile ? "20px 16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20, flexWrap: "wrap", gap: 10 }}>
         <div>
           <h1 style={{ fontSize: isMobile ? 22 : 28, fontWeight: 700, color: "#1a1a1a", margin: 0 }}>Dashboard</h1>
@@ -225,7 +419,6 @@ function Dashboard({ tickets, onNavigate, onOpenTicket, isMobile, loading }) {
           )}
         </div>
       </div>
-
       <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "repeat(4,1fr)", gap: 12, marginBottom: 24 }}>
         {stats.map(s => (
           <div key={s.label} style={{ background: "#fff", borderRadius: 12, border: "1px solid #EBEBEB", padding: "16px", display: "flex", alignItems: "center", gap: 12 }}>
@@ -237,7 +430,6 @@ function Dashboard({ tickets, onNavigate, onOpenTicket, isMobile, loading }) {
           </div>
         ))}
       </div>
-
       <div style={{ background: "#fff", borderRadius: 12, border: "1px solid #EBEBEB", padding: isMobile ? "16px" : "24px 28px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -274,7 +466,7 @@ function TicketsList({ tickets, onUpdate, onNavigate, isMobile, loading }) {
   const selBase = { padding: "8px 12px", borderRadius: 8, border: "1px solid #E0E0E0", background: "#fff", fontSize: 13, color: "#444", cursor: "pointer" };
 
   return (
-    <div style={{ flex: 1, padding: isMobile ? "16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
+    <div style={{ padding: isMobile ? "16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
       {selectedTicket && (
         <TicketModal ticket={selectedTicket} isMobile={isMobile}
           onClose={() => setSel(null)}
@@ -334,6 +526,7 @@ function TicketsList({ tickets, onUpdate, onNavigate, isMobile, loading }) {
 
 function NewTicket({ onNavigate, onCreateTicket, isMobile }) {
   const [form, setForm] = useState({ title: "", description: "", location: "", priority: "Media", type: "", deadline: "", reportedBy: "" });
+  const [files, setFiles]   = useState([]);
   const [errors, setErrors] = useState({});
   const [saving, setSaving] = useState(false);
 
@@ -356,26 +549,24 @@ function NewTicket({ onNavigate, onCreateTicket, isMobile }) {
       title: form.title, description: form.description,
       location: form.location, priority: form.priority, type: form.type,
       deadline: form.deadline || null, reported_by: form.reportedBy,
-      status: "Abierto",
+      status: "Abierto", attachments: [],
     }).select().single();
+    if (!error && data) {
+      let attachments = [];
+      if (files.length > 0) {
+        attachments = await uploadFiles(files, data.id);
+        await supabase.from("tickets").update({ attachments }).eq("id", data.id);
+      }
+      onCreateTicket(fromDb({ ...data, attachments }));
+    }
     setSaving(false);
-    if (!error && data) onCreateTicket(fromDb(data));
     onNavigate("tickets");
   };
 
-  const inp = (err) => ({
-    width: "100%", padding: "10px 14px", borderRadius: 8,
-    border: `1px solid ${err ? "#E24B4A" : "#E0E0E0"}`, fontSize: 14,
-    boxSizing: "border-box", outline: "none", color: "#333",
-  });
-  const selExtra = {
-    appearance: "none",
-    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E\")",
-    backgroundRepeat: "no-repeat", backgroundPosition: "right 12px center",
-  };
+  const inp = (err) => ({ ...fieldInp, border: `1px solid ${err ? "#E24B4A" : "#E0E0E0"}` });
 
   return (
-    <div style={{ flex: 1, padding: isMobile ? "16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
+    <div style={{ padding: isMobile ? "16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 20 }}>
         <button onClick={() => onNavigate("tickets")} style={{ background: "none", border: "none", cursor: "pointer", color: "#666", display: "flex", alignItems: "center", padding: 4 }}><IBack /></button>
         <div>
@@ -385,56 +576,51 @@ function NewTicket({ onNavigate, onCreateTicket, isMobile }) {
       </div>
       <div style={{ background: "#fff", borderRadius: 16, border: "1px solid #EBEBEB", padding: isMobile ? "20px" : "32px" }}>
         <div style={{ marginBottom: 18, padding: "14px 16px", background: "#F8F7FF", borderRadius: 10, border: "1px solid #E0DEFF" }}>
-          <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Reportado por <span style={{ color: "#E24B4A" }}>*</span></label>
-          <input value={form.reportedBy} onChange={e => set("reportedBy", e.target.value)} placeholder="Tu nombre completo" style={{ ...inp(errors.reportedBy), background: "#fff" }} />
+          {label("Reportado por", true)}
+          <input value={form.reportedBy} onChange={e => set("reportedBy", e.target.value)} placeholder="Tu nombre completo" style={inp(errors.reportedBy)} />
           {errors.reportedBy && <div style={{ color: "#E24B4A", fontSize: 12, marginTop: 4 }}>Este campo es requerido</div>}
         </div>
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Problema <span style={{ color: "#E24B4A" }}>*</span></label>
+        <div style={{ marginBottom: 16 }}>
+          {label("Problema", true)}
           <input value={form.title} onChange={e => set("title", e.target.value)} placeholder="Describe brevemente el problema" style={inp(errors.title)} />
           {errors.title && <div style={{ color: "#E24B4A", fontSize: 12, marginTop: 4 }}>Este campo es requerido</div>}
         </div>
-        <div style={{ marginBottom: 18 }}>
-          <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Descripción</label>
+        <div style={{ marginBottom: 16 }}>
+          {label("Descripción")}
           <textarea value={form.description} onChange={e => set("description", e.target.value)} placeholder="Describe el problema con detalle..."
-            style={{ ...inp(false), height: 110, resize: "vertical", fontFamily: "inherit" }} />
+            style={{ ...inp(false), height: 100, resize: "vertical", fontFamily: "inherit" }} />
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 16, marginBottom: 18 }}>
+        <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : "1fr 1fr", gap: 14, marginBottom: 16 }}>
           <div>
-            <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Ubicación <span style={{ color: "#E24B4A" }}>*</span></label>
-            <select value={form.location} onChange={e => set("location", e.target.value)} style={{ ...inp(errors.location), ...selExtra }}>
+            {label("Ubicación", true)}
+            <select value={form.location} onChange={e => set("location", e.target.value)} style={{ ...fieldSel, border: `1px solid ${errors.location ? "#E24B4A" : "#E0E0E0"}` }}>
               <option value="">Seleccionar ubicación</option>
               {LOCATIONS.map(l => <option key={l}>{l}</option>)}
             </select>
             {errors.location && <div style={{ color: "#E24B4A", fontSize: 12, marginTop: 4 }}>Este campo es requerido</div>}
           </div>
           <div>
-            <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Prioridad</label>
-            <select value={form.priority} onChange={e => set("priority", e.target.value)} style={{ ...inp(false), ...selExtra }}>
+            {label("Prioridad")}
+            <select value={form.priority} onChange={e => set("priority", e.target.value)} style={fieldSel}>
               {PRIORITIES.map(p => <option key={p}>{p}</option>)}
             </select>
           </div>
           <div>
-            <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Tipo <span style={{ color: "#E24B4A" }}>*</span></label>
-            <select value={form.type} onChange={e => set("type", e.target.value)} style={{ ...inp(errors.type), ...selExtra }}>
+            {label("Tipo", true)}
+            <select value={form.type} onChange={e => set("type", e.target.value)} style={{ ...fieldSel, border: `1px solid ${errors.type ? "#E24B4A" : "#E0E0E0"}` }}>
               <option value="">Seleccionar tipo</option>
               {TYPES.map(t => <option key={t}>{t}</option>)}
             </select>
             {errors.type && <div style={{ color: "#E24B4A", fontSize: 12, marginTop: 4 }}>Este campo es requerido</div>}
           </div>
           <div>
-            <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Fecha límite</label>
-            <input type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} style={inp(false)} />
+            {label("Fecha límite")}
+            <input type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} style={fieldInp} />
           </div>
         </div>
         <div style={{ marginBottom: 24 }}>
-          <label style={{ display: "block", fontWeight: 600, fontSize: 14, color: "#333", marginBottom: 6 }}>Archivos adjuntos</label>
-          <div style={{ border: "2px dashed #E0E0E0", borderRadius: 10, padding: "20px", textAlign: "center", cursor: "pointer", color: "#888" }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = "#4F46E5"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = "#E0E0E0"}
-          >
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, fontSize: 14 }}><IUpload />Subir archivos o fotos</div>
-          </div>
+          {label("Archivos adjuntos")}
+          <UploadZone files={files} setFiles={setFiles} />
         </div>
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
           <button onClick={() => onNavigate("tickets")} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>Cancelar</button>
