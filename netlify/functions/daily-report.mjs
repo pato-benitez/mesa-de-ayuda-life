@@ -128,7 +128,7 @@ export default async (req) => {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      from:    "Mesa de Ayuda <reportes@tudominio.com>",   // ← cambiá por tu dominio verificado en Resend
+      from: "onboarding@resend.dev",
       to:      [process.env.REPORT_EMAIL],                 // ← se configura en Netlify env vars
       subject: `📋 Reporte diario · ${total} tickets activos · ${new Date().toLocaleDateString("es-UY")}`,
       html,
