@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 // ← Cambiá este PIN por el que quieras
-const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN;
+const ADMIN_PIN = "1234";
 // Sesión dura 4 horas
 const SESSION_DURATION_MS = 4 * 60 * 60 * 1000;
 
@@ -319,12 +319,12 @@ function TicketRow({ ticket, onClick }) {
 }
 
 /* ── Ticket Modal ── */
-function TicketModal({ ticket, onClose, onUpdate, isMobile, isAdmin, onRequestAdmin }) {
+function TicketModal({ ticket, onClose, onUpdate, onDelete, isMobile, isAdmin, onRequestAdmin }) {
   const [form, setForm] = useState({
     title: ticket.title || "", description: ticket.description || "",
     location: ticket.location || "", priority: ticket.priority || "Media",
     status: ticket.status || "Abierto", type: ticket.type || "",
-    assignee: ticket.assignee || "", reportedBy: ticket.reportedBy || "",
+    reportedBy:  ticket.reportedBy || "",
     deadline: ticket.deadline || "",
   });
   const [existingAttachments, setExistingAttachments] = useState(ticket.attachments || []);
@@ -345,11 +345,18 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile, isAdmin, onRequestAd
     await supabase.from("tickets").update({
       title: form.title, description: form.description, location: form.location,
       priority: form.priority, status: form.status, type: form.type,
-      assignee: form.assignee || null, reported_by: form.reportedBy || null,
+      reported_by: form.reportedBy || null,
       deadline: form.deadline || null, attachments, notes,
     }).eq("id", ticket.id);
     setSaving(false);
     onUpdate({ ...ticket, ...form, reportedBy: form.reportedBy, attachments, notes });
+    onClose();
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm("¿Eliminar este ticket? Esta acción no se puede deshacer.")) return;
+    await supabase.from("tickets").delete().eq("id", ticket.id);
+    onDelete(ticket.id);
     onClose();
   };
 
@@ -447,7 +454,7 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile, isAdmin, onRequestAd
             </div>
           </div>
 
-          {/* Reportado por + Responsable */}
+          {/* Reportado por + Fecha + Creado */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               {lbl("Reportado por")}
@@ -457,26 +464,15 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile, isAdmin, onRequestAd
               }
             </div>
             <div>
-              {lbl("Responsable")}
-              {readOnly
-                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.assignee || "—"}</div>
-                : <input value={form.assignee} onChange={e => set("assignee", e.target.value)} placeholder="Nombre..." style={fieldInp} />
-              }
+              {lbl("Creado")}
+              <div style={{ ...fieldInp, background: "#F7F7F8", color: "#888", cursor: "default" }}>hace {ticket.daysAgo} días</div>
             </div>
-          </div>
-
-          {/* Fecha + Creado */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               {lbl("Fecha límite")}
               {readOnly
                 ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.deadline || "—"}</div>
                 : <input type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} style={fieldInp} />
               }
-            </div>
-            <div>
-              {lbl("Creado")}
-              <div style={{ ...fieldInp, background: "#F7F7F8", color: "#888", cursor: "default" }}>hace {ticket.daysAgo} días</div>
             </div>
           </div>
 
@@ -510,13 +506,18 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile, isAdmin, onRequestAd
               </button>
             </div>
           ) : (
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginBottom: 20 }}>
-              <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>Cancelar</button>
-              <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
-                flex: isMobile ? 1 : undefined, padding: "10px 24px", borderRadius: 8, border: "none",
-                background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
-                opacity: saving || !form.title.trim() ? 0.6 : 1,
-              }}>{saving ? "Guardando..." : "Guardar cambios"}</button>
+            <div style={{ display: "flex", gap: 10, justifyContent: "space-between", marginBottom: 20, flexWrap: "wrap" }}>
+              <button onClick={handleDelete} style={{ padding: "10px 16px", borderRadius: 8, border: "1px solid #FECACA", background: "#FFF5F5", color: "#E53E3E", cursor: "pointer", fontSize: 14, fontWeight: 500 }}>
+                🗑 Eliminar
+              </button>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>Cancelar</button>
+                <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
+                  padding: "10px 24px", borderRadius: 8, border: "none",
+                  background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+                  opacity: saving || !form.title.trim() ? 0.6 : 1,
+                }}>{saving ? "Guardando..." : "Guardar cambios"}</button>
+              </div>
             </div>
           )}
 
@@ -606,7 +607,8 @@ function TicketsList({ tickets, onUpdate, onNavigate, isMobile, loading, isAdmin
       {selectedTicket && (
         <TicketModal ticket={selectedTicket} isMobile={isMobile} isAdmin={isAdmin} onRequestAdmin={onRequestAdmin}
           onClose={() => setSel(null)}
-          onUpdate={u => { onUpdate(u); setSel(u); }} />
+          onUpdate={u => { onUpdate(u); setSel(u); }}
+          onDelete={id => { onUpdate({ id, _deleted: true }); setSel(null); }} />
       )}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <div>
@@ -799,7 +801,8 @@ export default function App() {
       {selectedTicket && (
         <TicketModal ticket={selectedTicket} isMobile={isMobile} isAdmin={isAdmin} onRequestAdmin={handleRequestAdmin}
           onClose={() => setSel(null)}
-          onUpdate={u => { updateTicket(u); setSel(u); }} />
+          onUpdate={u => { updateTicket(u); setSel(u); }}
+          onDelete={id => { setTickets(ts => ts.filter(t => t.id !== id)); setSel(null); }} />
       )}
 
       {!isMobile && (
