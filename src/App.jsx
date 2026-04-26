@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 // ← Cambiá este PIN por el que quieras
-const ADMIN_PIN = "1234";
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN;
 // Sesión dura 4 horas
 const SESSION_DURATION_MS = 4 * 60 * 60 * 1000;
 
