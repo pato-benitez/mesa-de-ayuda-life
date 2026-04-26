@@ -6,6 +6,11 @@ const supabase = createClient(
   import.meta.env.VITE_SUPABASE_ANON_KEY
 );
 
+// ← Cambiá este PIN por el que quieras
+const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN;
+// Sesión dura 4 horas
+const SESSION_DURATION_MS = 4 * 60 * 60 * 1000;
+
 const LOCATIONS = ["LDM", "LZA", "LMVO", "LMVD"];
 const TYPES = ["Eléctrico", "Plomería", "Carpintería", "Limpieza", "Equipamiento", "Infraestructura", "Otro"];
 const PRIORITIES = ["Urgente", "Alta", "Media", "Baja"];
@@ -32,6 +37,26 @@ function useIsMobile() {
     return () => window.removeEventListener("resize", fn);
   }, []);
   return mobile;
+}
+
+function useAdmin() {
+  const [isAdmin, setIsAdmin] = useState(() => {
+    const stored = sessionStorage.getItem("admin_until");
+    return stored && Date.now() < parseInt(stored);
+  });
+
+  const login = () => {
+    const until = Date.now() + SESSION_DURATION_MS;
+    sessionStorage.setItem("admin_until", String(until));
+    setIsAdmin(true);
+  };
+
+  const logout = () => {
+    sessionStorage.removeItem("admin_until");
+    setIsAdmin(false);
+  };
+
+  return { isAdmin, login, logout };
 }
 
 async function uploadFiles(files, ticketId) {
@@ -63,10 +88,10 @@ function FilePreview({ url, onRemove }) {
         <a href={url} target="_blank" rel="noopener noreferrer" style={{
           display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column",
           width: 72, height: 72, borderRadius: 8, border: "1px solid #E0E0E0",
-          background: "#F7F7F8", fontSize: 10, color: "#666", textDecoration: "none", gap: 4, padding: 4, textAlign: "center",
+          background: "#F7F7F8", fontSize: 10, color: "#666", textDecoration: "none", gap: 4,
         }}>
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#888" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-          <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 64 }}>archivo</span>
+          archivo
         </a>
       )}
       {onRemove && (
@@ -83,10 +108,7 @@ function FilePreview({ url, onRemove }) {
 function UploadZone({ files, setFiles }) {
   const inputRef = useRef();
   const [dragging, setDragging] = useState(false);
-  const handleFiles = (incoming) => {
-    const valid = Array.from(incoming).filter(f => f.size < 10 * 1024 * 1024);
-    setFiles(prev => [...prev, ...valid]);
-  };
+  const handleFiles = (incoming) => setFiles(prev => [...prev, ...Array.from(incoming).filter(f => f.size < 10 * 1024 * 1024)]);
   return (
     <div>
       <input ref={inputRef} type="file" multiple accept="image/*,application/pdf,.doc,.docx"
@@ -135,13 +157,7 @@ function UploadZone({ files, setFiles }) {
 function Badge({ label, type = "status" }) {
   const s = type === "status" ? statusStyle[label] : priorityStyle[label];
   if (!s) return null;
-  return (
-    <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 10px",
-      borderRadius: 20, fontSize: 12, fontWeight: 500,
-      background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>
-      {label}
-    </span>
-  );
+  return <span style={{ display: "inline-flex", alignItems: "center", padding: "2px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500, background: s.bg, color: s.color, border: `1px solid ${s.border}` }}>{label}</span>;
 }
 
 const IPin    = () => <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>;
@@ -153,6 +169,7 @@ const IX      = () => <svg width="18" height="18" viewBox="0 0 24 24" fill="none
 const IDash   = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>;
 const ITicket = () => <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/></svg>;
 const IPlus   = () => <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>;
+const ILock   = () => <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>;
 const IOpen   = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
 const IClock  = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>;
 const ICheck  = ({c}) => <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke={c} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>;
@@ -171,6 +188,54 @@ const lbl = (txt, required) => (
     {txt}{required && <span style={{ color: "#E24B4A", marginLeft: 3 }}>*</span>}
   </label>
 );
+
+/* ── PIN Modal ── */
+function PinModal({ onSuccess, onClose }) {
+  const [pin, setPin]     = useState("");
+  const [error, setError] = useState(false);
+  const inputRef          = useRef();
+
+  useEffect(() => { setTimeout(() => inputRef.current?.focus(), 100); }, []);
+
+  const handleSubmit = () => {
+    if (pin === ADMIN_PIN) { onSuccess(); }
+    else { setError(true); setPin(""); setTimeout(() => setError(false), 1500); }
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 2000, display: "flex", alignItems: "center", justifyContent: "center", padding: 24 }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{ background: "#fff", borderRadius: 16, padding: "32px 28px", width: "100%", maxWidth: 340, boxShadow: "0 20px 60px rgba(0,0,0,0.2)", textAlign: "center" }}>
+        <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#F0EEFF", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", color: "#4F46E5" }}>
+          <ILock />
+        </div>
+        <div style={{ fontWeight: 700, fontSize: 18, color: "#1a1a1a", marginBottom: 6 }}>Acceso de administrador</div>
+        <div style={{ fontSize: 14, color: "#888", marginBottom: 24 }}>Ingresá el PIN para editar este ticket</div>
+        <input
+          ref={inputRef}
+          type="password"
+          inputMode="numeric"
+          value={pin}
+          onChange={e => setPin(e.target.value)}
+          onKeyDown={e => e.key === "Enter" && handleSubmit()}
+          placeholder="PIN"
+          maxLength={8}
+          style={{
+            ...fieldInp,
+            textAlign: "center", fontSize: 24, letterSpacing: 8, marginBottom: 12,
+            border: `2px solid ${error ? "#E53E3E" : "#E0E0E0"}`,
+            transition: "border-color 0.2s",
+          }}
+        />
+        {error && <div style={{ color: "#E53E3E", fontSize: 13, marginBottom: 10 }}>PIN incorrecto</div>}
+        <div style={{ display: "flex", gap: 10 }}>
+          <button onClick={onClose} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>Cancelar</button>
+          <button onClick={handleSubmit} disabled={!pin} style={{ flex: 1, padding: "10px", borderRadius: 8, border: "none", background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600, opacity: pin ? 1 : 0.5 }}>Entrar</button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 /* ── Notes section ── */
 function NotesSection({ notes, onAddNote }) {
@@ -191,8 +256,6 @@ function NotesSection({ notes, onAddNote }) {
       <div style={{ fontSize: 11, fontWeight: 600, color: "#999", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 12 }}>
         Notas {notes.length > 0 && `(${notes.length})`}
       </div>
-
-      {/* Existing notes */}
       {notes.length > 0 && (
         <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 14 }}>
           {[...notes].reverse().map((n, i) => (
@@ -208,33 +271,17 @@ function NotesSection({ notes, onAddNote }) {
           ))}
         </div>
       )}
-
-      {/* Add new note */}
       <div style={{ background: "#F8F7FF", borderRadius: 10, padding: "12px", border: "1px solid #E0DEFF" }}>
-        <textarea
-          value={text}
-          onChange={e => setText(e.target.value)}
-          placeholder="Escribí una nota..."
-          style={{ ...fieldInp, height: 72, resize: "none", fontFamily: "inherit", background: "#fff", marginBottom: 8 }}
-        />
+        <textarea value={text} onChange={e => setText(e.target.value)} placeholder="Escribí una nota..."
+          style={{ ...fieldInp, height: 72, resize: "none", fontFamily: "inherit", background: "#fff", marginBottom: 8 }} />
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            value={author}
-            onChange={e => setAuthor(e.target.value)}
-            placeholder="Tu nombre (opcional)"
-            style={{ ...fieldInp, flex: 1, padding: "7px 10px", fontSize: 13 }}
-          />
-          <button
-            onClick={handleAdd}
-            disabled={adding || !text.trim()}
-            style={{
-              padding: "8px 16px", borderRadius: 8, border: "none",
-              background: "#4F46E5", color: "#fff", cursor: "pointer",
-              fontSize: 13, fontWeight: 500, whiteSpace: "nowrap",
-              opacity: adding || !text.trim() ? 0.6 : 1,
-            }}>
-            {adding ? "..." : "Agregar"}
-          </button>
+          <input value={author} onChange={e => setAuthor(e.target.value)} placeholder="Tu nombre (opcional)"
+            style={{ ...fieldInp, flex: 1, padding: "7px 10px", fontSize: 13 }} />
+          <button onClick={handleAdd} disabled={adding || !text.trim()} style={{
+            padding: "8px 16px", borderRadius: 8, border: "none", background: "#4F46E5", color: "#fff",
+            cursor: "pointer", fontSize: 13, fontWeight: 500, whiteSpace: "nowrap",
+            opacity: adding || !text.trim() ? 0.6 : 1,
+          }}>{adding ? "..." : "Agregar"}</button>
         </div>
       </div>
     </div>
@@ -271,17 +318,14 @@ function TicketRow({ ticket, onClick }) {
   );
 }
 
-function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
+/* ── Ticket Modal ── */
+function TicketModal({ ticket, onClose, onUpdate, isMobile, isAdmin, onRequestAdmin }) {
   const [form, setForm] = useState({
-    title:       ticket.title || "",
-    description: ticket.description || "",
-    location:    ticket.location || "",
-    priority:    ticket.priority || "Media",
-    status:      ticket.status || "Abierto",
-    type:        ticket.type || "",
-    assignee:    ticket.assignee || "",
-    reportedBy:  ticket.reportedBy || "",
-    deadline:    ticket.deadline || "",
+    title: ticket.title || "", description: ticket.description || "",
+    location: ticket.location || "", priority: ticket.priority || "Media",
+    status: ticket.status || "Abierto", type: ticket.type || "",
+    assignee: ticket.assignee || "", reportedBy: ticket.reportedBy || "",
+    deadline: ticket.deadline || "",
   });
   const [existingAttachments, setExistingAttachments] = useState(ticket.attachments || []);
   const [notes, setNotes]   = useState(ticket.notes || []);
@@ -298,17 +342,14 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
       const uploaded = await uploadFiles(newFiles, ticket.id);
       attachments = [...attachments, ...uploaded];
     }
-    const { error } = await supabase.from("tickets").update({
-      title: form.title, description: form.description,
-      location: form.location, priority: form.priority,
-      status: form.status, type: form.type,
-      assignee: form.assignee || null,
-      reported_by: form.reportedBy || null,
-      deadline: form.deadline || null,
-      attachments, notes,
+    await supabase.from("tickets").update({
+      title: form.title, description: form.description, location: form.location,
+      priority: form.priority, status: form.status, type: form.type,
+      assignee: form.assignee || null, reported_by: form.reportedBy || null,
+      deadline: form.deadline || null, attachments, notes,
     }).eq("id", ticket.id);
     setSaving(false);
-    if (!error) onUpdate({ ...ticket, ...form, reportedBy: form.reportedBy, attachments, notes });
+    onUpdate({ ...ticket, ...form, reportedBy: form.reportedBy, attachments, notes });
     onClose();
   };
 
@@ -319,6 +360,8 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
     onUpdate({ ...ticket, ...form, reportedBy: form.reportedBy, notes: newNotes });
   };
 
+  const readOnly = !isAdmin;
+
   return (
     <div style={{
       position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000,
@@ -326,47 +369,63 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
       justifyContent: "center", padding: isMobile ? 0 : 24,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: "#fff",
-        borderRadius: isMobile ? "16px 16px 0 0" : 16,
+        background: "#fff", borderRadius: isMobile ? "16px 16px 0 0" : 16,
         width: "100%", maxWidth: isMobile ? "100%" : 600,
         maxHeight: isMobile ? "95vh" : "92vh", overflowY: "auto",
         boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
       }}>
         {/* Header */}
         <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
-          <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a" }}>Ticket #{ticket.id}</div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a" }}>Ticket #{ticket.id}</div>
+            {readOnly && (
+              <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#888", background: "#F5F5F5", padding: "3px 8px", borderRadius: 20, border: "1px solid #E0E0E0" }}>
+                <ILock /> Solo lectura
+              </span>
+            )}
+            {isAdmin && (
+              <span style={{ fontSize: 11, color: "#4F46E5", background: "#F0EEFF", padding: "3px 8px", borderRadius: 20, border: "1px solid #E0DEFF" }}>
+                ✓ Admin
+              </span>
+            )}
+          </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4 }}><IX /></button>
         </div>
 
         <div style={{ padding: "20px" }}>
           {/* Título */}
           <div style={{ marginBottom: 14 }}>
-            {lbl("Problema", true)}
-            <input value={form.title} onChange={e => set("title", e.target.value)}
-              style={{ ...fieldInp, fontWeight: 600, fontSize: 15 }} />
+            {lbl("Problema")}
+            {readOnly
+              ? <div style={{ ...fieldInp, background: "#FAFAFA", color: "#333", fontWeight: 600, fontSize: 15 }}>{form.title}</div>
+              : <input value={form.title} onChange={e => set("title", e.target.value)} style={{ ...fieldInp, fontWeight: 600, fontSize: 15 }} />
+            }
           </div>
 
           {/* Descripción */}
           <div style={{ marginBottom: 14 }}>
             {lbl("Descripción")}
-            <textarea value={form.description} onChange={e => set("description", e.target.value)}
-              placeholder="Sin descripción..."
-              style={{ ...fieldInp, height: 80, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+            {readOnly
+              ? <div style={{ ...fieldInp, background: "#FAFAFA", minHeight: 60, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{form.description || <span style={{ color: "#CCC" }}>Sin descripción</span>}</div>
+              : <textarea value={form.description} onChange={e => set("description", e.target.value)} placeholder="Sin descripción..." style={{ ...fieldInp, height: 80, resize: "vertical", fontFamily: "inherit", lineHeight: 1.5 }} />
+            }
           </div>
 
           {/* Estado + Prioridad */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               {lbl("Estado")}
-              <select value={form.status} onChange={e => set("status", e.target.value)} style={fieldSel}>
-                {STATUSES.map(s => <option key={s}>{s}</option>)}
-              </select>
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}><Badge label={form.status} type="status" /></div>
+                : <select value={form.status} onChange={e => set("status", e.target.value)} style={fieldSel}>{STATUSES.map(s => <option key={s}>{s}</option>)}</select>
+              }
             </div>
             <div>
               {lbl("Prioridad")}
-              <select value={form.priority} onChange={e => set("priority", e.target.value)} style={fieldSel}>
-                {PRIORITIES.map(p => <option key={p}>{p}</option>)}
-              </select>
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}><Badge label={form.priority} type="priority" /></div>
+                : <select value={form.priority} onChange={e => set("priority", e.target.value)} style={fieldSel}>{PRIORITIES.map(p => <option key={p}>{p}</option>)}</select>
+              }
             </div>
           </div>
 
@@ -374,17 +433,17 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               {lbl("Ubicación")}
-              <select value={form.location} onChange={e => set("location", e.target.value)} style={fieldSel}>
-                <option value="">Seleccionar</option>
-                {LOCATIONS.map(l => <option key={l}>{l}</option>)}
-              </select>
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.location || "—"}</div>
+                : <select value={form.location} onChange={e => set("location", e.target.value)} style={fieldSel}><option value="">Seleccionar</option>{LOCATIONS.map(l => <option key={l}>{l}</option>)}</select>
+              }
             </div>
             <div>
               {lbl("Tipo")}
-              <select value={form.type} onChange={e => set("type", e.target.value)} style={fieldSel}>
-                <option value="">Seleccionar</option>
-                {TYPES.map(t => <option key={t}>{t}</option>)}
-              </select>
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.type || "—"}</div>
+                : <select value={form.type} onChange={e => set("type", e.target.value)} style={fieldSel}><option value="">Seleccionar</option>{TYPES.map(t => <option key={t}>{t}</option>)}</select>
+              }
             </div>
           </div>
 
@@ -392,25 +451,32 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               {lbl("Reportado por")}
-              <input value={form.reportedBy} onChange={e => set("reportedBy", e.target.value)} placeholder="Nombre..." style={fieldInp} />
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.reportedBy || "—"}</div>
+                : <input value={form.reportedBy} onChange={e => set("reportedBy", e.target.value)} placeholder="Nombre..." style={fieldInp} />
+              }
             </div>
             <div>
               {lbl("Responsable")}
-              <input value={form.assignee} onChange={e => set("assignee", e.target.value)} placeholder="Nombre..." style={fieldInp} />
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.assignee || "—"}</div>
+                : <input value={form.assignee} onChange={e => set("assignee", e.target.value)} placeholder="Nombre..." style={fieldInp} />
+              }
             </div>
           </div>
 
-          {/* Fecha límite + creado */}
+          {/* Fecha + Creado */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14 }}>
             <div>
               {lbl("Fecha límite")}
-              <input type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} style={fieldInp} />
+              {readOnly
+                ? <div style={{ ...fieldInp, background: "#FAFAFA" }}>{form.deadline || "—"}</div>
+                : <input type="date" value={form.deadline} onChange={e => set("deadline", e.target.value)} style={fieldInp} />
+              }
             </div>
             <div>
               {lbl("Creado")}
-              <div style={{ ...fieldInp, background: "#F7F7F8", color: "#888", cursor: "default" }}>
-                hace {ticket.daysAgo} días
-              </div>
+              <div style={{ ...fieldInp, background: "#F7F7F8", color: "#888", cursor: "default" }}>hace {ticket.daysAgo} días</div>
             </div>
           </div>
 
@@ -420,33 +486,41 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
               {lbl("Archivos adjuntos")}
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {existingAttachments.map(url => (
-                  <FilePreview key={url} url={url}
-                    onRemove={() => setExistingAttachments(prev => prev.filter(u => u !== url))} />
+                  <FilePreview key={url} url={url} onRemove={isAdmin ? () => setExistingAttachments(prev => prev.filter(u => u !== url)) : undefined} />
                 ))}
               </div>
             </div>
           )}
-          <div style={{ marginBottom: 14 }}>
-            {lbl(existingAttachments.length > 0 ? "Agregar más archivos" : "Archivos adjuntos")}
-            <UploadZone files={newFiles} setFiles={setNewFiles} />
-          </div>
+          {isAdmin && (
+            <div style={{ marginBottom: 14 }}>
+              {lbl(existingAttachments.length > 0 ? "Agregar más archivos" : "Archivos adjuntos")}
+              <UploadZone files={newFiles} setFiles={setNewFiles} />
+            </div>
+          )}
 
-          {/* Guardar cambios */}
-          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginBottom: 20 }}>
-            <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>
-              Cancelar
-            </button>
-            <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
-              flex: isMobile ? 1 : undefined,
-              padding: "10px 24px", borderRadius: 8, border: "none",
-              background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
-              opacity: saving || !form.title.trim() ? 0.6 : 1,
-            }}>
-              {saving ? "Guardando..." : "Guardar cambios"}
-            </button>
-          </div>
+          {/* Botón admin o guardar */}
+          {readOnly ? (
+            <div style={{ marginBottom: 20 }}>
+              <button onClick={onRequestAdmin} style={{
+                width: "100%", padding: "11px", borderRadius: 8, border: "1px dashed #C0B7F5",
+                background: "#F8F7FF", color: "#4F46E5", cursor: "pointer", fontSize: 14, fontWeight: 500,
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
+              }}>
+                <ILock /> Ingresar como administrador para editar
+              </button>
+            </div>
+          ) : (
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginBottom: 20 }}>
+              <button onClick={onClose} style={{ padding: "10px 20px", borderRadius: 8, border: "1px solid #DDD", background: "#fff", color: "#555", cursor: "pointer", fontSize: 14 }}>Cancelar</button>
+              <button onClick={handleSave} disabled={saving || !form.title.trim()} style={{
+                flex: isMobile ? 1 : undefined, padding: "10px 24px", borderRadius: 8, border: "none",
+                background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 14, fontWeight: 600,
+                opacity: saving || !form.title.trim() ? 0.6 : 1,
+              }}>{saving ? "Guardando..." : "Guardar cambios"}</button>
+            </div>
+          )}
 
-          {/* Notas */}
+          {/* Notas — siempre visibles para todos */}
           <NotesSection notes={notes} onAddNote={handleAddNote} />
         </div>
       </div>
@@ -456,10 +530,10 @@ function TicketModal({ ticket, onClose, onUpdate, isMobile }) {
 
 function Dashboard({ tickets, onNavigate, onOpenTicket, isMobile, loading }) {
   const counts = {
-    Abierto:      tickets.filter(t => t.status === "Abierto").length,
+    Abierto: tickets.filter(t => t.status === "Abierto").length,
     "En Proceso": tickets.filter(t => t.status === "En Proceso").length,
-    Resuelto:     tickets.filter(t => t.status === "Resuelto").length,
-    Cerrado:      tickets.filter(t => t.status === "Cerrado").length,
+    Resuelto: tickets.filter(t => t.status === "Resuelto").length,
+    Cerrado: tickets.filter(t => t.status === "Cerrado").length,
   };
   const recent = tickets.filter(t => t.status !== "Cerrado").slice(0, 5);
   const stats = [
@@ -509,7 +583,7 @@ function Dashboard({ tickets, onNavigate, onOpenTicket, isMobile, loading }) {
   );
 }
 
-function TicketsList({ tickets, onUpdate, onNavigate, isMobile, loading }) {
+function TicketsList({ tickets, onUpdate, onNavigate, isMobile, loading, isAdmin, onRequestAdmin }) {
   const [search, setSearch]           = useState("");
   const [filterStatus, setFS]         = useState("Todos");
   const [filterPriority, setFP]       = useState("Todos");
@@ -530,7 +604,7 @@ function TicketsList({ tickets, onUpdate, onNavigate, isMobile, loading }) {
   return (
     <div style={{ padding: isMobile ? "16px" : "40px 48px", overflowY: "auto", paddingBottom: isMobile ? "80px" : undefined }}>
       {selectedTicket && (
-        <TicketModal ticket={selectedTicket} isMobile={isMobile}
+        <TicketModal ticket={selectedTicket} isMobile={isMobile} isAdmin={isAdmin} onRequestAdmin={onRequestAdmin}
           onClose={() => setSel(null)}
           onUpdate={u => { onUpdate(u); setSel(u); }} />
       )}
@@ -607,10 +681,9 @@ function NewTicket({ onNavigate, onCreateTicket, isMobile }) {
     if (!validate()) return;
     setSaving(true);
     const { data, error } = await supabase.from("tickets").insert({
-      title: form.title, description: form.description,
-      location: form.location, priority: form.priority, type: form.type,
-      deadline: form.deadline || null, reported_by: form.reportedBy,
-      status: "Abierto", attachments: [], notes: [],
+      title: form.title, description: form.description, location: form.location,
+      priority: form.priority, type: form.type, deadline: form.deadline || null,
+      reported_by: form.reportedBy, status: "Abierto", attachments: [], notes: [],
     }).select().single();
     if (!error && data) {
       let attachments = [];
@@ -699,7 +772,9 @@ export default function App() {
   const [tickets, setTickets]    = useState([]);
   const [loading, setLoading]    = useState(true);
   const [selectedTicket, setSel] = useState(null);
+  const [showPinModal, setShowPinModal] = useState(false);
   const isMobile                 = useIsMobile();
+  const { isAdmin, login, logout } = useAdmin();
 
   useEffect(() => {
     supabase.from("tickets").select("*").order("created_at", { ascending: false })
@@ -709,6 +784,9 @@ export default function App() {
   const updateTicket = u => setTickets(ts => ts.map(t => t.id === u.id ? u : t));
   const createTicket = t => setTickets(ts => [t, ...ts]);
 
+  const handlePinSuccess = () => { login(); setShowPinModal(false); };
+  const handleRequestAdmin = () => setShowPinModal(true);
+
   const navItems = [
     { id: "dashboard", label: "Dashboard", icon: <IDash /> },
     { id: "tickets",   label: "Tickets",   icon: <ITicket /> },
@@ -716,11 +794,14 @@ export default function App() {
 
   return (
     <div style={{ display: "flex", flexDirection: isMobile ? "column" : "row", height: "100vh", fontFamily: "'Inter', -apple-system, BlinkMacSystemFont, sans-serif", background: "#F7F7F8" }}>
+      {showPinModal && <PinModal onSuccess={handlePinSuccess} onClose={() => setShowPinModal(false)} />}
+
       {selectedTicket && (
-        <TicketModal ticket={selectedTicket} isMobile={isMobile}
+        <TicketModal ticket={selectedTicket} isMobile={isMobile} isAdmin={isAdmin} onRequestAdmin={handleRequestAdmin}
           onClose={() => setSel(null)}
           onUpdate={u => { updateTicket(u); setSel(u); }} />
       )}
+
       {!isMobile && (
         <div style={{ width: 200, background: "#fff", borderRight: "1px solid #EBEBEB", display: "flex", flexDirection: "column", flexShrink: 0 }}>
           <div style={{ padding: "20px 20px 16px", borderBottom: "1px solid #F5F5F5" }}>
@@ -741,23 +822,43 @@ export default function App() {
               >{item.icon}{item.label}</button>
             ))}
           </nav>
+          {/* Admin status in sidebar */}
+          <div style={{ padding: "12px 14px", borderTop: "1px solid #F5F5F5" }}>
+            {isAdmin ? (
+              <button onClick={logout} style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 8, border: "1px solid #E0DEFF", background: "#F0EEFF", color: "#4F46E5", cursor: "pointer", fontSize: 12, fontWeight: 500 }}>
+                <ILock /> Admin activo · Salir
+              </button>
+            ) : (
+              <button onClick={() => setShowPinModal(true)} style={{ width: "100%", display: "flex", alignItems: "center", gap: 6, padding: "7px 10px", borderRadius: 8, border: "1px solid #E0E0E0", background: "none", color: "#999", cursor: "pointer", fontSize: 12 }}>
+                <ILock /> Acceso admin
+              </button>
+            )}
+          </div>
         </div>
       )}
+
       <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
         {isMobile && (
           <div style={{ background: "#fff", borderBottom: "1px solid #EBEBEB", padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
             <img src="/favicon.png" alt="LIFE" style={{ height: 24 }} />
-            <button onClick={() => setView("new")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", border: "none", borderRadius: 8, background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
-              <IPlus />Nuevo
-            </button>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              {isAdmin
+                ? <button onClick={logout} style={{ fontSize: 11, color: "#4F46E5", background: "#F0EEFF", border: "1px solid #E0DEFF", borderRadius: 20, padding: "4px 10px", cursor: "pointer" }}>✓ Admin</button>
+                : <button onClick={() => setShowPinModal(true)} style={{ fontSize: 11, color: "#999", background: "none", border: "1px solid #E0E0E0", borderRadius: 20, padding: "4px 10px", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}><ILock />Admin</button>
+              }
+              <button onClick={() => setView("new")} style={{ display: "flex", alignItems: "center", gap: 6, padding: "8px 14px", border: "none", borderRadius: 8, background: "#4F46E5", color: "#fff", cursor: "pointer", fontSize: 13, fontWeight: 500 }}>
+                <IPlus />Nuevo
+              </button>
+            </div>
           </div>
         )}
         <div style={{ flex: 1, overflow: "auto" }}>
           {view === "dashboard" && <Dashboard tickets={tickets} onNavigate={setView} onOpenTicket={setSel} isMobile={isMobile} loading={loading} />}
-          {view === "tickets"   && <TicketsList tickets={tickets} onUpdate={updateTicket} onNavigate={setView} isMobile={isMobile} loading={loading} />}
+          {view === "tickets"   && <TicketsList tickets={tickets} onUpdate={updateTicket} onNavigate={setView} isMobile={isMobile} loading={loading} isAdmin={isAdmin} onRequestAdmin={handleRequestAdmin} />}
           {view === "new"       && <NewTicket onNavigate={setView} onCreateTicket={createTicket} isMobile={isMobile} />}
         </div>
       </div>
+
       {isMobile && (
         <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, background: "#fff", borderTop: "1px solid #EBEBEB", display: "flex", zIndex: 500, paddingBottom: "env(safe-area-inset-bottom)" }}>
           {navItems.map(item => (
