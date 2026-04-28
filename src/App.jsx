@@ -7,7 +7,7 @@ const supabase = createClient(
 );
 
 // ← Cambiá este PIN por el que quieras
-const ADMIN_PIN = import.meta.env.VITE_ADMIN_PIN;
+const ADMIN_PIN = "1234";
 // Sesión dura 4 horas
 const SESSION_DURATION_MS = 4 * 60 * 60 * 1000;
 
@@ -378,12 +378,23 @@ function TicketModal({ ticket, onClose, onUpdate, onDelete, isMobile, isAdmin, o
       <div style={{
         background: "#fff", borderRadius: isMobile ? "16px 16px 0 0" : 16,
         width: "100%", maxWidth: isMobile ? "100%" : 600,
-        maxHeight: isMobile ? "95vh" : "92vh", overflowY: "auto",
+        maxHeight: isMobile ? "92vh" : "92vh", overflowY: "auto",
         boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
       }}>
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#DDD" }} />
+          </div>
+        )}
         {/* Header */}
-        <div style={{ padding: "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
+        <div style={{ padding: isMobile ? "10px 16px 12px" : "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            {isMobile && (
+              <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#555", padding: "4px 8px 4px 0", display: "flex", alignItems: "center" }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+              </button>
+            )}
             <div style={{ fontWeight: 700, fontSize: 16, color: "#1a1a1a" }}>Ticket #{ticket.id}</div>
             {readOnly && (
               <span style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 11, color: "#888", background: "#F5F5F5", padding: "3px 8px", borderRadius: 20, border: "1px solid #E0E0E0" }}>
@@ -396,7 +407,7 @@ function TicketModal({ ticket, onClose, onUpdate, onDelete, isMobile, isAdmin, o
               </span>
             )}
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4 }}><IX /></button>
+          {!isMobile && <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "#999", padding: 4 }}><IX /></button>}
         </div>
 
         <div style={{ padding: "20px" }}>
