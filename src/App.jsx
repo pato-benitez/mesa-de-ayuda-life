@@ -371,22 +371,17 @@ function TicketModal({ ticket, onClose, onUpdate, onDelete, isMobile, isAdmin, o
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000,
-      display: "flex", alignItems: isMobile ? "flex-end" : "center",
+      position: "fixed", inset: 0, background: isMobile ? "#fff" : "rgba(0,0,0,0.45)", zIndex: 1000,
+      display: "flex", alignItems: isMobile ? "flex-start" : "center",
       justifyContent: "center", padding: isMobile ? 0 : 24,
-    }} onClick={e => e.target === e.currentTarget && onClose()}>
+    }} onClick={e => !isMobile && e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: "#fff", borderRadius: isMobile ? "16px 16px 0 0" : 16,
+        background: "#fff", borderRadius: isMobile ? 0 : 16,
         width: "100%", maxWidth: isMobile ? "100%" : 600,
-        maxHeight: isMobile ? "92vh" : "92vh", overflowY: "auto",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.18)",
+        height: isMobile ? "100%" : "auto",
+        maxHeight: isMobile ? "100vh" : "92vh", overflowY: "auto",
+        boxShadow: isMobile ? "none" : "0 20px 60px rgba(0,0,0,0.18)",
       }}>
-        {/* Mobile drag handle */}
-        {isMobile && (
-          <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
-            <div style={{ width: 36, height: 4, borderRadius: 2, background: "#DDD" }} />
-          </div>
-        )}
         {/* Header */}
         <div style={{ padding: isMobile ? "10px 16px 12px" : "18px 20px 14px", borderBottom: "1px solid #F0F0F0", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
